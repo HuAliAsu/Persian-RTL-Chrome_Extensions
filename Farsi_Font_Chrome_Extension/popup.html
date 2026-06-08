@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+
+  <!-- هدر: غیرفعال کردن کل افزونه -->
+  <div class="header">
+    <label class="checkbox-label">
+      <input type="checkbox" id="globalToggle">
+      <span>غیرفعال کردن کل افزونه</span>
+    </label>
+  </div>
+
+  <div id="settingsContainer">
+
+    <!-- انتخاب فونت -->
+    <div class="control-group">
+      <label for="fontSelect">انتخاب فونت:</label>
+      <select id="fontSelect">
+        <option value="Vazirmatn[wght]">وزیرمتن (Vazirmatn)</option>
+        <option value="Shabnam">شبنم (Shabnam)</option>
+        <option value="Shabnam-Medium">شبنم متوسط</option>
+        <option value="Shabnam-Bold">شبنم ضخیم</option>
+        <option value="Samim">صمیم (Samim)</option>
+        <option value="Samim-Medium">صمیم متوسط</option>
+        <option value="Samim-Bold">صمیم ضخیم</option>
+        <option value="Sahel-VF">ساحل (Sahel)</option>
+        <option value="Parastoo">پرستو (Parastoo)</option>
+        <option value="Parastoo-Bold">پرستو ضخیم</option>
+        <option value="Gandom">گندم (Gandom)</option>
+        <option value="Mikhak[DSTY,KSHD,wght]">میخک (Mikhak)</option>
+        <option value="Behdad-Regular">بهداد (Behdad)</option>
+        <option value="Nika-Regular">نیکا (Nika)</option>
+      </select>
+    </div>
+
+    <!-- بزرگ‌نمایی مختص این سایت -->
+    <div class="control-group">
+      <div class="slider-header">
+        <label for="fontSizeSlider">
+          بزرگ‌نمایی
+          <span class="site-label" id="siteLabel"></span>
+        </label>
+        <span id="fontSizeValue" dir="ltr">100%</span>
+      </div>
+      <input type="range" id="fontSizeSlider" min="80" max="150" value="100" step="5">
+    </div>
+
+    <!-- سایت فعلی -->
+    <div class="control-group site-toggle-group">
+      <div class="site-info">
+        <span>فعال برای این سایت:</span>
+        <span id="currentHostname" class="hostname" dir="ltr">...</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="siteToggle">
+        <span class="slider-thumb"></span>
+      </label>
+    </div>
+
+    <!-- دکمه مشاهده لیست -->
+    <button id="openSitesBtn" class="sites-btn">
+      مشاهده سایت‌های فعال‌شده
+      <span id="siteCount" class="badge">0</span>
+    </button>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

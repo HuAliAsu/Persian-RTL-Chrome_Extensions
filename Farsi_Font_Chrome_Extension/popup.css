@@ -1,0 +1,166 @@
+* { box-sizing: border-box; }
+
+body {
+  width: 290px;
+  font-family: Tahoma, Arial, sans-serif;
+  padding: 12px;
+  margin: 0;
+  background: #f9fafb;
+  color: #333;
+}
+
+/* هدر با چک‌باکس */
+.header {
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #dc2626;
+}
+
+#settingsContainer { transition: opacity 0.3s ease; }
+
+.control-group {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.site-label {
+  font-size: 10px;
+  color: #6b7280;
+  margin-right: 4px;
+}
+
+#fontSizeValue {
+  font-size: 12px;
+  font-weight: bold;
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+input[type=range] {
+  width: 100%;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+select {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.site-toggle-group {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.site-info {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.hostname {
+  font-weight: bold;
+  color: #2563eb;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+/* Toggle Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider-thumb {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #ccc;
+  transition: .3s;
+  border-radius: 22px;
+}
+
+.slider-thumb:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider-thumb { background-color: #2563eb; }
+input:checked + .slider-thumb:before { transform: translateX(18px); }
+
+/* دکمه سایت‌ها */
+.sites-btn {
+  width: 100%;
+  padding: 9px 12px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #374151;
+  transition: background 0.2s;
+}
+
+.sites-btn:hover { background: #f3f4f6; }
+
+.badge {
+  background: #2563eb;
+  color: white;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+}
