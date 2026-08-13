@@ -6,9 +6,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$workspaceRoot = Split-Path -Parent $projectRoot
 $privateIcon = Join-Path $projectRoot 'icon.private.png'
-$outputDirectory = Join-Path $workspaceRoot 'dist'
+$outputDirectory = Join-Path $projectRoot 'dist'
 $outputName = "Farsi_Font_Chrome_Extension.$Flavor.zip"
 $outputPath = Join-Path $outputDirectory $outputName
 $stagingDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "farsi-font-extension-$Flavor-$([Guid]::NewGuid().ToString('N'))"

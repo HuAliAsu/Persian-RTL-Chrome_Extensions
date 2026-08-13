@@ -2,7 +2,7 @@
 
 افزونه‌ای مبتنی بر Manifest V3 برای خواناتر کردن متن فارسی و عربی در وب‌سایت‌ها، به‌ویژه سرویس‌های گفت‌وگومحور هوش مصنوعی. افزونه فونت فارسی را فقط روی متن مرتبط اعمال می‌کند و برای بلوک‌های مناسب، جهت متن را بر اساس اولین نویسهٔ دارای جهت قوی تشخیص می‌دهد.
 
-![آیکون افزونه](Farsi_Font_Chrome_Extension/icon-public.svg)
+![آیکون افزونه](icon-public.svg)
 
 ## قابلیت‌ها
 
@@ -20,7 +20,7 @@
 
 ### روش سریع
 
-فایل [Farsi_Font_Chrome_Extension.zip](Farsi_Font_Chrome_Extension/Farsi_Font_Chrome_Extension.zip) را دانلود و extract کنید. سپس در Chrome:
+فایل [Farsi_Font_Chrome_Extension.zip](Farsi_Font_Chrome_Extension.zip) را دانلود و extract کنید. سپس در Chrome:
 
 1. به `chrome://extensions` بروید.
 2. گزینهٔ **Developer mode** را فعال کنید.
@@ -29,7 +29,7 @@
 
 ### توسعهٔ محلی
 
-repository را clone کنید و همان پوشهٔ `Farsi_Font_Chrome_Extension` را از طریق **Load unpacked** وارد Chrome کنید. پس از تغییر فایل‌های افزونه، در صفحهٔ extensions روی دکمهٔ reload افزونه کلیک کنید.
+repository را clone کنید و پوشهٔ ریشهٔ repository را از طریق **Load unpacked** وارد Chrome کنید. پس از تغییر فایل‌های افزونه، در صفحهٔ extensions روی دکمهٔ reload افزونه کلیک کنید.
 
 ## استفاده
 
@@ -57,7 +57,6 @@ repository را clone کنید و همان پوشهٔ `Farsi_Font_Chrome_Extensi
 - Google Chrome برای تست دستی افزونه
 
 ```powershell
-Set-Location Farsi_Font_Chrome_Extension
 npm.cmd test
 
 node --check core.js
@@ -76,7 +75,7 @@ git diff --check
 ساخت ZIP عمومی:
 
 ```powershell
-.\Farsi_Font_Chrome_Extension\scripts\build-package.ps1 -Flavor public
+.\scripts\build-package.ps1 -Flavor public
 ```
 
 خروجی در `dist/Farsi_Font_Chrome_Extension.public.zip` نوشته می‌شود و با `python -m zipfile -t` اعتبارسنجی می‌شود. فایل عمومی فقط از آیکون عمومی repository استفاده می‌کند.
@@ -84,7 +83,7 @@ git diff --check
 ## ساختار پروژه
 
 ```text
-Farsi_Font_Chrome_Extension/
+.
 ├── background.js          # migration و lifecycle افزونه
 ├── content.js             # موتور فونت، RTL و observerها
 ├── core.js                # منطق خالص detector و site rules
