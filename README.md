@@ -1,0 +1,107 @@
+# فونت فارسی و راست‌چین خودکار برای Chrome
+
+افزونه‌ای مبتنی بر Manifest V3 برای خواناتر کردن متن فارسی و عربی در وب‌سایت‌ها، به‌ویژه سرویس‌های گفت‌وگومحور هوش مصنوعی. افزونه فونت فارسی را فقط روی متن مرتبط اعمال می‌کند و برای بلوک‌های مناسب، جهت متن را بر اساس اولین نویسهٔ دارای جهت قوی تشخیص می‌دهد.
+
+![آیکون افزونه](Farsi_Font_Chrome_Extension/icon-public.svg)
+
+## قابلیت‌ها
+
+- راست‌چین خودکار مستقل از انتخاب فونت، با امکان خاموش و روشن‌کردن از popup.
+- تشخیص جهت متن با قاعدهٔ «اولین نویسهٔ قوی»: فارسی، عربی و عبری RTL؛ متن لاتین LTR؛ و متن صرفاً عددی یا نشانه‌ای خنثی است.
+- اعمال RTL فقط روی بلوک‌های متنی مناسب مانند پاراگراف، فهرست، عنوان، نقل‌قول و سلول جدول.
+- حفظ جهت اصلی سایت؛ با خاموش‌شدن RTL، غیرفعال‌شدن سایت یا افزونه، attributeهای افزونه پاک می‌شوند.
+- پشتیبانی از `textarea`، ورودی متنی و editorهای `contenteditable` با `dir="auto"` برای تایپ و paste فارسی.
+- استثنا برای code block، terminal، MathJax، KaTeX، Monaco و CodeMirror تا LTR باقی بمانند.
+- پشتیبانی از پاسخ‌های streaming، برنامه‌های SPA، iframeهای مجاز و Shadow DOM باز به‌صورت best effort.
+- پنج فونت فارسی سبک: Vazirmatn، Samim، Sahel، Gandom و Mikhak.
+- migration نسخه‌دار تنظیمات و تبدیل امن ruleهای قدیمی pathدار مانند `github.com/copilot`.
+
+## نصب
+
+### روش سریع
+
+فایل [Farsi_Font_Chrome_Extension.zip](Farsi_Font_Chrome_Extension/Farsi_Font_Chrome_Extension.zip) را دانلود و extract کنید. سپس در Chrome:
+
+1. به `chrome://extensions` بروید.
+2. گزینهٔ **Developer mode** را فعال کنید.
+3. روی **Load unpacked** کلیک کنید.
+4. پوشهٔ extract‌شده را انتخاب کنید.
+
+### توسعهٔ محلی
+
+repository را clone کنید و همان پوشهٔ `Farsi_Font_Chrome_Extension` را از طریق **Load unpacked** وارد Chrome کنید. پس از تغییر فایل‌های افزونه، در صفحهٔ extensions روی دکمهٔ reload افزونه کلیک کنید.
+
+## استفاده
+
+پس از بازکردن popup افزونه:
+
+- **راست‌چین خودکار** جهت فارسی و انگلیسی را مستقل از فونت کنترل می‌کند.
+- **انتخاب فونت** و **بزرگ‌نمایی** فقط روی متن فارسی اعمال می‌شوند.
+- **فعال برای این سایت** افزونه را برای URL فعلی فعال یا غیرفعال می‌کند.
+- **غیرفعال کردن کل افزونه** هم فونت و هم RTL را بدون تغییر تنظیمات ذخیره‌شده متوقف می‌کند.
+
+## منطق جهت متن
+
+- `سلام دنیا` و `123 - سلام` به‌صورت RTL پردازش می‌شوند.
+- `Hello world` و `Use متغیر in this code` به‌صورت LTR باقی می‌مانند.
+- `۱۲۳۴` خنثی است و جهت جدیدی به آن تحمیل نمی‌شود.
+
+برای جلوگیری از تغییر ناخواستهٔ متن انگلیسی، فقط بلوک‌هایی که نتیجهٔ آن‌ها RTL است با `data-persian-direction="rtl"` علامت‌گذاری می‌شوند. متن LTR و خنثی دست‌نخورده باقی می‌ماند.
+
+## توسعه و تست
+
+پیش‌نیازها:
+
+- Node.js 20 یا جدیدتر
+- Python 3 برای بررسی JSON و ZIP
+- Google Chrome برای تست دستی افزونه
+
+```powershell
+Set-Location Farsi_Font_Chrome_Extension
+npm.cmd test
+
+node --check core.js
+node --check background.js
+node --check content.js
+node --check popup.js
+node --check sites.js
+python -m json.tool manifest.json
+git diff --check
+```
+
+تست‌های خودکار تابع تشخیص جهت، migration تنظیمات، تطبیق hostname/path و fallback فونت‌های حذف‌شده را پوشش می‌دهند.
+
+## ساخت بسته
+
+ساخت ZIP عمومی:
+
+```powershell
+.\Farsi_Font_Chrome_Extension\scripts\build-package.ps1 -Flavor public
+```
+
+خروجی در `dist/Farsi_Font_Chrome_Extension.public.zip` نوشته می‌شود و با `python -m zipfile -t` اعتبارسنجی می‌شود. فایل عمومی فقط از آیکون عمومی repository استفاده می‌کند.
+
+## ساختار پروژه
+
+```text
+Farsi_Font_Chrome_Extension/
+├── background.js          # migration و lifecycle افزونه
+├── content.js             # موتور فونت، RTL و observerها
+├── core.js                # منطق خالص detector و site rules
+├── fonts/                 # پنج فونت همراه افزونه
+├── popup.*                # تنظیمات سریع افزونه
+├── sites.*                # فهرست سایت‌های فعال
+├── scripts/               # ساخت بستهٔ release
+└── tests/                 # تست‌های Node.js
+```
+
+## محدودیت‌ها
+
+- Shadow DOM بسته قابل دسترسی نیست.
+- افزونه روی صفحه‌های داخلی Chrome و برخی URLهای محدودشده اجرا نمی‌شود.
+- پشتیبانی از DOM سرویس‌های ثالث با تغییر ساختار آن سایت‌ها ممکن است نیازمند اصلاح شود.
+- تست سایت‌های نیازمند login باید با حساب آزمایشی و افزونهٔ unpacked انجام شود.
+
+## حریم خصوصی
+
+افزونه متن صفحه را به سرویس خارجی ارسال نمی‌کند. تمام تشخیص جهت و اعمال فونت داخل مرورگر انجام می‌شود.
