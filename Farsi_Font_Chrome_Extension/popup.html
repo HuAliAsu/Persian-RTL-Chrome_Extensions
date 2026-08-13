@@ -1,14 +1,10 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
-
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="popup.css">
 </head>
-
 <body>
-
-  <!-- هدر: غیرفعال کردن کل افزونه -->
   <div class="header">
     <label class="checkbox-label">
       <input type="checkbox" id="globalToggle">
@@ -16,9 +12,18 @@
     </label>
   </div>
 
-  <div id="settingsContainer">
+  <fieldset id="settingsContainer">
+    <div class="control-group rtl-toggle-group">
+      <div class="setting-copy">
+        <label for="rtlToggle">راست‌چین خودکار</label>
+        <span id="rtlDescription">تشخیص جهت فارسی و انگلیسی</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="rtlToggle" aria-describedby="rtlDescription">
+        <span class="slider-thumb" aria-hidden="true"></span>
+      </label>
+    </div>
 
-    <!-- انتخاب فونت -->
     <div class="control-group">
       <label for="fontSelect">انتخاب فونت:</label>
       <select id="fontSelect">
@@ -39,7 +44,6 @@
       </select>
     </div>
 
-    <!-- بزرگ‌نمایی مختص این سایت -->
     <div class="control-group">
       <div class="slider-header">
         <label for="fontSizeSlider">
@@ -51,27 +55,24 @@
       <input type="range" id="fontSizeSlider" min="80" max="150" value="100" step="5">
     </div>
 
-    <!-- سایت فعلی -->
     <div class="control-group site-toggle-group">
       <div class="site-info">
         <span>فعال برای این سایت:</span>
         <span id="currentHostname" class="hostname" dir="ltr">...</span>
       </div>
       <label class="switch">
-        <input type="checkbox" id="siteToggle">
-        <span class="slider-thumb"></span>
+        <input type="checkbox" id="siteToggle" aria-label="فعال‌سازی افزونه برای سایت فعلی">
+        <span class="slider-thumb" aria-hidden="true"></span>
       </label>
     </div>
 
-    <!-- دکمه مشاهده لیست -->
     <button id="openSitesBtn" class="sites-btn">
       مشاهده سایت‌های فعال‌شده
       <span id="siteCount" class="badge">0</span>
     </button>
+  </fieldset>
 
-  </div>
-
+  <script src="core.js"></script>
   <script src="popup.js"></script>
 </body>
-
 </html>

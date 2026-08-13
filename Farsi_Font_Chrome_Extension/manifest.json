@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
   "name": "فونت سفارشی من",
-  "version": "1.0",
-  "description": "تغییر فونت فارسی صفحات وب.",
+  "version": "1.1.0",
+  "description": "تغییر فونت فارسی و راست‌چین خودکار متن فارسی و عربی در صفحات وب.",
   "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["core.js", "content.js"],
       "run_at": "document_idle",
       "all_frames": true
     }

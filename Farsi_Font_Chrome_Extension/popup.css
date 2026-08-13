@@ -32,7 +32,37 @@ body {
   accent-color: #dc2626;
 }
 
-#settingsContainer { transition: opacity 0.3s ease; }
+#settingsContainer {
+  border: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  transition: opacity 0.3s ease;
+}
+
+#settingsContainer.is-disabled { opacity: 0.4; }
+
+.rtl-toggle-group {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.setting-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.setting-copy span {
+  color: #6b7280;
+  font-size: 11px;
+}
 
 .control-group {
   margin-bottom: 12px;
@@ -112,7 +142,17 @@ select {
   flex-shrink: 0;
 }
 
-.switch input { opacity: 0; width: 0; height: 0; }
+.switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.switch input:focus-visible + .slider-thumb {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
 
 .slider-thumb {
   position: absolute;

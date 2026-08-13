@@ -1,17 +1,20 @@
-document.addEventListener('DOMContentLoaded', async () => {
-  const globalToggle     = document.getElementById('globalToggle');
-  const fontSelect       = document.getElementById('fontSelect');
-  const fontSizeSlider   = document.getElementById('fontSizeSlider');
-  const fontSizeValue    = document.getElementById('fontSizeValue');
-  const siteToggle       = document.getElementById('siteToggle');
-  const currentHostnameEl= document.getElementById('currentHostname');
-  const settingsContainer= document.getElementById('settingsContainer');
-  const siteCount        = document.getElementById('siteCount');
-  const openSitesBtn     = document.getElementById('openSitesBtn');
-  const siteLabel        = document.getElementById('siteLabel');
+'use strict';
 
-  // پیش‌نمایش فونت‌ها
-  Array.from(fontSelect.options).forEach(option => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const { normalizeHostname, normalizeSiteRules, ruleMatchesUrl } = PersianExtensionCore;
+  const globalToggle = document.getElementById('globalToggle');
+  const rtlToggle = document.getElementById('rtlToggle');
+  const fontSelect = document.getElementById('fontSelect');
+  const fontSizeSlider = document.getElementById('fontSizeSlider');
+  const fontSizeValue = document.getElementById('fontSizeValue');
+  const siteToggle = document.getElementById('siteToggle');
+  const currentHostnameEl = document.getElementById('currentHostname');
+  const settingsContainer = document.getElementById('settingsContainer');
+  const siteCount = document.getElementById('siteCount');
+  const openSitesBtn = document.getElementById('openSitesBtn');
+  const siteLabel = document.getElementById('siteLabel');
+
+  for (const option of fontSelect.options) {
     const fontUrl = chrome.runtime.getURL(`fonts/${option.value}.woff2`);
     const style = document.createElement('style');
     style.textContent = `
@@ -19,88 +22,89 @@ document.addEventListener('DOMContentLoaded', async () => {
       option[value="${option.value}"] { font-family: '${option.value}', Tahoma; }
     `;
     document.head.appendChild(style);
-  });
-
-  // وقتی افزونه غیرفعال است UI را کم‌رنگ کن
-  function updateUIState(isDisabled) {
-    settingsContainer.style.opacity = isDisabled ? '0.4' : '1';
-    settingsContainer.style.pointerEvents = isDisabled ? 'none' : 'auto';
   }
 
-  // hostname
+  function updateUIState(isDisabled) {
+    settingsContainer.disabled = isDisabled;
+    settingsContainer.classList.toggle('is-disabled', isDisabled);
+  }
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  let pageUrl = '';
   let hostname = '';
   try {
-    hostname = new URL(tab.url).hostname;
-    currentHostnameEl.textContent = hostname.length > 24
-      ? hostname.substring(0, 24) + '…'
-      : hostname;
+    const url = new URL(tab.url);
+    pageUrl = url.href;
+    hostname = normalizeHostname(url.hostname);
+    currentHostnameEl.textContent = hostname.length > 24 ? `${hostname.slice(0, 24)}…` : hostname;
     siteLabel.textContent = `(${hostname})`;
-  } catch (e) {
+  } catch (_error) {
     currentHostnameEl.textContent = 'نامشخص';
     siteToggle.disabled = true;
+    fontSizeSlider.disabled = true;
   }
 
-  // بارگذاری تنظیمات
   chrome.storage.local.get(
-    ['globalEnabled', 'selectedFont', 'enabledSites', 'siteFontSizes'],
-    (result) => {
+    ['globalEnabled', 'rtlEnabled', 'selectedFont', 'enabledSites', 'siteFontSizes'],
+    result => {
       const isDisabled = result.globalEnabled === false;
+      const rules = normalizeSiteRules(result.enabledSites || []);
       globalToggle.checked = isDisabled;
-      updateUIState(isDisabled);
-
+      rtlToggle.checked = result.rtlEnabled !== false;
       fontSelect.value = result.selectedFont || 'Vazirmatn[wght]';
 
-      const siteFontSizes = result.siteFontSizes || {};
-      const currentSize = siteFontSizes[hostname] || '100';
+      const currentSize = (result.siteFontSizes || {})[hostname] || '100';
       fontSizeSlider.value = currentSize;
-      fontSizeValue.textContent = currentSize + '%';
-
-      const sites = result.enabledSites || [];
-      siteToggle.checked = sites.includes(hostname);
-      siteCount.textContent = sites.length;
+      fontSizeValue.textContent = `${currentSize}%`;
+      siteToggle.checked = rules.some(rule => ruleMatchesUrl(rule, pageUrl));
+      siteCount.textContent = rules.length;
+      updateUIState(isDisabled);
     }
   );
 
-  // غیرفعال کردن کل افزونه
-  globalToggle.addEventListener('change', (e) => {
-    // چک‌باکس تیک‌خورده = افزونه غیرفعال
-    chrome.storage.local.set({ globalEnabled: !e.target.checked });
-    updateUIState(e.target.checked);
+  globalToggle.addEventListener('change', event => {
+    const disabled = event.target.checked;
+    chrome.storage.local.set({ globalEnabled: !disabled });
+    updateUIState(disabled);
   });
 
-  fontSelect.addEventListener('change', (e) => {
-    chrome.storage.local.set({ selectedFont: e.target.value });
+  rtlToggle.addEventListener('change', event => {
+    chrome.storage.local.set({ rtlEnabled: event.target.checked });
   });
 
-  fontSizeSlider.addEventListener('input', (e) => {
-    fontSizeValue.textContent = e.target.value + '%';
+  fontSelect.addEventListener('change', event => {
+    chrome.storage.local.set({ selectedFont: event.target.value });
   });
 
-  // ذخیره سایز مختص این سایت
-  fontSizeSlider.addEventListener('change', (e) => {
-    chrome.storage.local.get(['siteFontSizes'], (result) => {
-      const sizes = result.siteFontSizes || {};
-      sizes[hostname] = e.target.value;
+  fontSizeSlider.addEventListener('input', event => {
+    fontSizeValue.textContent = `${event.target.value}%`;
+  });
+
+  fontSizeSlider.addEventListener('change', event => {
+    if (!hostname) return;
+    chrome.storage.local.get(['siteFontSizes'], result => {
+      const sizes = { ...(result.siteFontSizes || {}), [hostname]: event.target.value };
       chrome.storage.local.set({ siteFontSizes: sizes });
     });
   });
 
-  siteToggle.addEventListener('change', (e) => {
-    chrome.storage.local.get(['enabledSites'], (result) => {
-      let sites = result.enabledSites || [];
-      if (e.target.checked) {
-        if (!sites.includes(hostname)) sites.push(hostname);
+  siteToggle.addEventListener('change', event => {
+    if (!hostname || !pageUrl) return;
+    chrome.storage.local.get(['enabledSites'], result => {
+      let rules = normalizeSiteRules(result.enabledSites || []);
+      if (event.target.checked) {
+        if (!rules.some(rule => ruleMatchesUrl(rule, pageUrl))) {
+          rules.push({ hostname, includeSubdomains: false, paths: null });
+        }
       } else {
-        sites = sites.filter(s => s !== hostname);
+        rules = rules.filter(rule => !ruleMatchesUrl(rule, pageUrl));
       }
-      chrome.storage.local.set({ enabledSites: sites }, () => {
-        siteCount.textContent = sites.length;
+      chrome.storage.local.set({ enabledSites: rules }, () => {
+        siteCount.textContent = rules.length;
       });
     });
   });
 
-  // باز کردن صفحه لیست سایت‌ها
   openSitesBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('sites.html') });
   });

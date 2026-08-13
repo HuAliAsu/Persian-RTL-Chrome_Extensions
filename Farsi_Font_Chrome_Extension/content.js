@@ -1,165 +1,406 @@
-const STYLE_ID = 'my-custom-font-style';
-const DATA_ATTR = 'data-persian-font';
-const PERSIAN_REGEX = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
+'use strict';
 
-let isContextValid = true;
+const {
+  containsPersianText,
+  detectDirection,
+  isUrlEnabled,
+  normalizeHostname,
+  normalizeSiteRules
+} = PersianExtensionCore;
 
-window.addEventListener('beforeunload', () => {
-  isContextValid = false;
-});
+const FONT_ATTR = 'data-persian-font';
+const DIRECTION_ATTR = 'data-persian-direction';
+const STYLE_ATTR = 'data-persian-extension-style';
+const BLOCK_SELECTOR = 'p,li,blockquote,figcaption,td,th,h1,h2,h3,h4,h5,h6,article,[role="article"],[role="listitem"]';
+const EDITOR_SELECTOR = 'textarea,input[type="text"],input[type="search"],[contenteditable="true"],[contenteditable="plaintext-only"]';
+const EXCLUDED_SELECTOR = 'script,style,noscript,pre,code,kbd,samp,svg,math,.katex,.katex-display,.MathJax,.mathjax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]';
+const OBSERVER_OPTIONS = { childList: true, characterData: true, subtree: true };
 
-function injectFontFace(fontName, fontSize) {
-  if (!isContextValid) return;
-
-  try {
-    let styleEl = document.getElementById(STYLE_ID);
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = STYLE_ID;
-      document.head.appendChild(styleEl);
-    }
-
-    const fontUrl = chrome.runtime.getURL(`fonts/${fontName}.woff2`);
-
-    // ✅ تغییر: font-size به جای zoom
-    // مثال: fontSize = "120" → font-size: 1.2em
-    const fontSizeMultiplier = (parseInt(fontSize) / 100).toFixed(2);
-    const sizeRule = fontSize && fontSize !== '100'
-      ? `[${DATA_ATTR}] { font-size: ${fontSizeMultiplier}em !important; }`
-      : '';
-
-    styleEl.textContent = `
-      @font-face {
-        font-family: 'MyExtensionFont';
-        src: url('${fontUrl}') format('woff2');
-        font-display: swap;
-        unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
-      }
-      [${DATA_ATTR}] {
-        font-family: 'MyExtensionFont', Tahoma, Arial, sans-serif !important;
-      }
-      ${sizeRule}
-    `;
-  } catch (err) {
-    if (err.message.includes('Extension context invalidated')) {
-      isContextValid = false;
-    }
-  }
-}
-
-function removeFont() {
-  try {
-    document.getElementById(STYLE_ID)?.remove();
-    document.querySelectorAll(`[${DATA_ATTR}]`).forEach(el => el.removeAttribute(DATA_ATTR));
-  } catch (err) {
-    // خاموش است - نگران نباش
-  }
-}
-
-function tagPersianElements() {
-  if (!isContextValid) return;
-
-  try {
-    document.querySelectorAll(`[${DATA_ATTR}]`).forEach(el => el.removeAttribute(DATA_ATTR));
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) {
-      const text = node.textContent.trim();
-      if (PERSIAN_REGEX.test(text)) {
-        const parent = node.parentElement;
-        if (parent && parent.tagName !== 'SCRIPT' && parent.tagName !== 'STYLE') {
-          parent.setAttribute(DATA_ATTR, 'true');
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Error tagging Persian elements:', err);
-  }
-}
-
+let contextValid = true;
+let settings = null;
+let topUrl = window === window.top ? location.href : '';
 let mutationTimer = null;
+let urlTimer = null;
+let composing = false;
+const pendingNodes = new Set();
+const rootObservers = new Map();
+const listenerRoots = new Set();
+const originalEditorDirections = new WeakMap();
 
-function checkAndApply() {
-  if (!isContextValid) return;
+function extensionCss(fontName, fontSize) {
+  const fontUrl = chrome.runtime.getURL(`fonts/${fontName}.woff2`);
+  const multiplier = (Number.parseInt(fontSize, 10) / 100 || 1).toFixed(2);
+  return `
+    @font-face {
+      font-family: 'PersianExtensionFont';
+      src: url('${fontUrl}') format('woff2');
+      font-display: swap;
+      unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
+    }
+    [${FONT_ATTR}] {
+      font-family: 'PersianExtensionFont', Tahoma, Arial, sans-serif !important;
+      font-size: ${multiplier}em !important;
+    }
+    [${DIRECTION_ATTR}="rtl"] {
+      direction: rtl !important;
+      text-align: start !important;
+      unicode-bidi: plaintext !important;
+    }
+    [${DIRECTION_ATTR}] :is(pre,code,kbd,samp,.katex,.MathJax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]) {
+      direction: ltr !important;
+      text-align: left !important;
+      unicode-bidi: isolate !important;
+    }
+    [${FONT_ATTR}] :is(pre,code,kbd,samp,.katex,.MathJax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]) {
+      font-family: monospace !important;
+      font-size: 1em !important;
+    }
+  `;
+}
 
+function isExtensionContextError(error) {
+  return String(error?.message || error).includes('Extension context invalidated');
+}
+
+function invalidateContext(error) {
+  if (isExtensionContextError(error)) {
+    contextValid = false;
+    cleanupLifecycle();
+    return true;
+  }
+  return false;
+}
+
+function currentUrl() {
+  return window === window.top ? location.href : topUrl;
+}
+
+function currentHostname() {
+  try {
+    return normalizeHostname(new URL(currentUrl()).hostname);
+  } catch (_error) {
+    return normalizeHostname(location.hostname);
+  }
+}
+
+function isSiteActive() {
+  return Boolean(settings?.globalEnabled !== false && isUrlEnabled(settings?.enabledSites, currentUrl()));
+}
+
+function effectiveFontEnabled() {
+  return Boolean(isSiteActive() && settings?.selectedFont);
+}
+
+function effectiveRtlEnabled() {
+  return Boolean(isSiteActive() && settings?.rtlEnabled !== false);
+}
+
+function getRootStyle(root) {
+  return root.querySelector?.(`style[${STYLE_ATTR}]`) || null;
+}
+
+function ensureRootStyle(root) {
+  if (!effectiveFontEnabled() && !effectiveRtlEnabled()) {
+    getRootStyle(root)?.remove();
+    return;
+  }
+  let style = getRootStyle(root);
+  if (!style) {
+    style = document.createElement('style');
+    style.setAttribute(STYLE_ATTR, 'true');
+    if (root instanceof Document) (root.head || root.documentElement).appendChild(style);
+    else root.appendChild(style);
+  }
+  const sizes = settings.siteFontSizes || {};
+  style.textContent = extensionCss(settings.selectedFont || 'Vazirmatn[wght]', sizes[currentHostname()] || '100');
+}
+
+function isExcluded(element) {
+  return Boolean(element?.closest?.(EXCLUDED_SELECTOR));
+}
+
+function findTextBlock(node) {
+  const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+  if (!element || isExcluded(element) || element.closest?.(EDITOR_SELECTOR)) return null;
+  const semantic = element.closest(BLOCK_SELECTOR);
+  if (semantic && !semantic.matches('body,html,nav,aside')) return semantic;
+  let candidate = element;
+  while (candidate && !candidate.matches('body,html,nav,aside,main')) {
+    if (candidate.tagName === 'DIV' && candidate.querySelectorAll(':scope > p,:scope > article,:scope > section').length === 0) {
+      return candidate;
+    }
+    candidate = candidate.parentElement;
+  }
+  return null;
+}
+
+function textWithoutExcludedDescendants(element) {
+  const parts = [];
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      return parent && !parent.closest(EXCLUDED_SELECTOR)
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_REJECT;
+    }
+  });
+  let node;
+  let length = 0;
+  while ((node = walker.nextNode()) && length < 20000) {
+    parts.push(node.data);
+    length += node.data.length;
+  }
+  return parts.join(' ');
+}
+
+function updateBlock(element) {
+  if (!element?.isConnected || isExcluded(element)) return;
+  const text = textWithoutExcludedDescendants(element).trim();
+  if (effectiveFontEnabled() && containsPersianText(text)) element.setAttribute(FONT_ATTR, 'true');
+  else element.removeAttribute(FONT_ATTR);
+
+  if (effectiveRtlEnabled() && detectDirection(text) === 'rtl') element.setAttribute(DIRECTION_ATTR, 'rtl');
+  else element.removeAttribute(DIRECTION_ATTR);
+}
+
+function editorText(editor) {
+  if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) return editor.value;
+  return editor.innerText || editor.textContent || '';
+}
+
+function rememberEditorDirection(editor) {
+  if (originalEditorDirections.has(editor)) return;
+  originalEditorDirections.set(editor, {
+    hadAttribute: editor.hasAttribute('dir'),
+    value: editor.getAttribute('dir')
+  });
+}
+
+function restoreEditorDirection(editor) {
+  const original = originalEditorDirections.get(editor);
+  if (!original) return;
+  if (original.hadAttribute) editor.setAttribute('dir', original.value);
+  else editor.removeAttribute('dir');
+  originalEditorDirections.delete(editor);
+}
+
+function updateEditor(editor) {
+  if (!editor?.isConnected || isExcluded(editor)) return;
+  const text = editorText(editor);
+  if (effectiveFontEnabled() && containsPersianText(text)) editor.setAttribute(FONT_ATTR, 'true');
+  else editor.removeAttribute(FONT_ATTR);
+
+  if (effectiveRtlEnabled()) {
+    rememberEditorDirection(editor);
+    editor.setAttribute('dir', 'auto');
+    editor.setAttribute(DIRECTION_ATTR, 'auto');
+  } else {
+    restoreEditorDirection(editor);
+    editor.removeAttribute(DIRECTION_ATTR);
+  }
+}
+
+function processNode(node) {
+  if (!node) return;
+  if (node.nodeType === Node.TEXT_NODE) {
+    updateBlock(findTextBlock(node));
+    return;
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+
+  const element = node.nodeType === Node.ELEMENT_NODE ? node : null;
+  if (element?.matches(EDITOR_SELECTOR)) updateEditor(element);
+  node.querySelectorAll?.(EDITOR_SELECTOR).forEach(updateEditor);
+
+  if (element) updateBlock(findTextBlock(element));
+  const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+  let textNode;
+  const blocks = new Set();
+  while ((textNode = walker.nextNode())) {
+    const block = findTextBlock(textNode);
+    if (block) blocks.add(block);
+  }
+  blocks.forEach(updateBlock);
+  discoverOpenShadowRoots(node);
+}
+
+function removeAllEffects() {
+  for (const root of rootObservers.keys()) {
+    root.querySelectorAll?.(`[${FONT_ATTR}]`).forEach(element => element.removeAttribute(FONT_ATTR));
+    root.querySelectorAll?.(`[${DIRECTION_ATTR}]`).forEach(element => {
+      if (element.matches(EDITOR_SELECTOR)) restoreEditorDirection(element);
+      element.removeAttribute(DIRECTION_ATTR);
+    });
+    getRootStyle(root)?.remove();
+  }
+}
+
+function scanAllRoots() {
+  for (const root of rootObservers.keys()) {
+    ensureRootStyle(root);
+    processNode(root instanceof Document ? root.documentElement : root);
+  }
+  if (!isSiteActive()) removeAllEffects();
+}
+
+function flushMutations() {
+  mutationTimer = null;
+  if (!contextValid || document.hidden) return;
+  for (const node of pendingNodes) processNode(node);
+  pendingNodes.clear();
+}
+
+function queueNode(node) {
+  pendingNodes.add(node);
+  if (mutationTimer !== null) return;
+  mutationTimer = window.setTimeout(flushMutations, 80);
+}
+
+function handleMutations(records) {
+  for (const record of records) {
+    if (record.type === 'characterData') queueNode(record.target);
+    else record.addedNodes.forEach(queueNode);
+  }
+}
+
+function handleEditorInput(event) {
+  const editor = event.target?.closest?.(EDITOR_SELECTOR);
+  if (!editor || composing) return;
+  updateEditor(editor);
+}
+
+function handleCompositionStart() {
+  composing = true;
+}
+
+function handleCompositionEnd(event) {
+  composing = false;
+  handleEditorInput(event);
+}
+
+function attachRoot(root) {
+  if (rootObservers.has(root)) return;
+  const observer = new MutationObserver(handleMutations);
+  rootObservers.set(root, observer);
+  if (!document.hidden) observer.observe(root, OBSERVER_OPTIONS);
+  root.addEventListener('input', handleEditorInput, true);
+  root.addEventListener('compositionstart', handleCompositionStart, true);
+  root.addEventListener('compositionend', handleCompositionEnd, true);
+  listenerRoots.add(root);
+  ensureRootStyle(root);
+}
+
+function discoverOpenShadowRoots(root) {
+  if (!root?.querySelectorAll) return;
+  const candidates = [];
+  if (root.nodeType === Node.ELEMENT_NODE) candidates.push(root);
+  root.querySelectorAll('*').forEach(element => candidates.push(element));
+  for (const element of candidates) {
+    if (element.shadowRoot?.mode === 'open') {
+      attachRoot(element.shadowRoot);
+      processNode(element.shadowRoot);
+    }
+  }
+}
+
+function refreshTopUrl() {
+  if (!contextValid) return;
+  if (window === window.top) {
+    if (topUrl !== location.href) {
+      topUrl = location.href;
+      scanAllRoots();
+    }
+    return;
+  }
+  try {
+    chrome.runtime.sendMessage({ type: 'persian-extension:get-top-url' }, response => {
+      if (chrome.runtime.lastError || !response?.url || response.url === topUrl) return;
+      topUrl = response.url;
+      scanAllRoots();
+    });
+  } catch (error) {
+    invalidateContext(error);
+  }
+}
+
+function resumeObservers() {
+  for (const [root, observer] of rootObservers) observer.observe(root, OBSERVER_OPTIONS);
+  refreshTopUrl();
+  scanAllRoots();
+}
+
+function pauseObservers() {
+  rootObservers.forEach(observer => observer.disconnect());
+  if (mutationTimer !== null) clearTimeout(mutationTimer);
+  mutationTimer = null;
+  pendingNodes.clear();
+}
+
+function cleanupLifecycle() {
+  pauseObservers();
+  if (urlTimer !== null) clearInterval(urlTimer);
+  urlTimer = null;
+  listenerRoots.forEach(root => {
+    root.removeEventListener('input', handleEditorInput, true);
+    root.removeEventListener('compositionstart', handleCompositionStart, true);
+    root.removeEventListener('compositionend', handleCompositionEnd, true);
+  });
+  listenerRoots.clear();
+}
+
+function handlePageHide(event) {
+  if (event.persisted) pauseObservers();
+  else cleanupLifecycle();
+}
+
+function handlePageShow(event) {
+  if (!event.persisted || !contextValid) return;
+  if (urlTimer === null) urlTimer = window.setInterval(refreshTopUrl, 1000);
+  resumeObservers();
+}
+
+function loadSettings() {
   try {
     chrome.storage.local.get(
-      ['globalEnabled', 'selectedFont', 'enabledSites', 'siteFontSizes'],
-      (result) => {
-        if (!isContextValid) return;
-
-        const hostname = window.location.hostname;
-        const enabledSites = result.enabledSites || [];
-        const isSiteEnabled = enabledSites.includes(hostname);
-        const siteFontSizes = result.siteFontSizes || {};
-        const fontSize = siteFontSizes[hostname] || '100';
-
-        if (result.globalEnabled !== false && isSiteEnabled && result.selectedFont) {
-          injectFontFace(result.selectedFont, fontSize);
-          tagPersianElements();
-        } else {
-          removeFont();
-        }
+      ['globalEnabled', 'rtlEnabled', 'selectedFont', 'enabledSites', 'siteFontSizes'],
+      result => {
+        if (chrome.runtime.lastError || !contextValid) return;
+        settings = {
+          globalEnabled: result.globalEnabled !== false,
+          rtlEnabled: result.rtlEnabled !== false,
+          selectedFont: result.selectedFont || 'Vazirmatn[wght]',
+          enabledSites: normalizeSiteRules(result.enabledSites || []),
+          siteFontSizes: result.siteFontSizes || {}
+        };
+        attachRoot(document);
+        discoverOpenShadowRoots(document);
+        refreshTopUrl();
+        scanAllRoots();
       }
     );
-  } catch (err) {
-    if (err.message.includes('Extension context invalidated')) {
-      isContextValid = false;
-    }
+  } catch (error) {
+    invalidateContext(error);
   }
 }
 
-checkAndApply();
-
-try {
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (!isContextValid || area !== 'local') return;
-    checkAndApply();
-  });
-} catch (err) {
-  // Extension غیرفعال است
-}
-
-let observer = null;
-try {
-  observer = new MutationObserver(() => {
-    if (!isContextValid) {
-      observer?.disconnect();
-      return;
-    }
-
-    clearTimeout(mutationTimer);
-    mutationTimer = setTimeout(() => {
-      if (!isContextValid) return;
-
-      try {
-        chrome.storage.local.get(['globalEnabled', 'selectedFont', 'enabledSites'], (result) => {
-          if (!isContextValid) return;
-
-          const hostname = window.location.hostname;
-          const enabledSites = result.enabledSites || [];
-          if (result.globalEnabled !== false && enabledSites.includes(hostname) && result.selectedFont) {
-            tagPersianElements();
-          }
-        });
-      } catch (err) {
-        if (err.message.includes('Extension context invalidated')) {
-          isContextValid = false;
-          observer?.disconnect();
-        }
-      }
-    }, 500);
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-} catch (err) {
-  // Observer failed - OK
-}
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (!contextValid || areaName !== 'local' || !settings) return;
+  for (const [key, change] of Object.entries(changes)) {
+    if (key === 'enabledSites') settings.enabledSites = normalizeSiteRules(change.newValue || []);
+    else if (['globalEnabled', 'rtlEnabled', 'selectedFont', 'siteFontSizes'].includes(key)) settings[key] = change.newValue;
+  }
+  refreshTopUrl();
+  scanAllRoots();
+});
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    observer?.disconnect();
-  } else if (isContextValid) {
-    observer?.observe(document.body, { childList: true, subtree: true });
-  }
+  if (document.hidden) pauseObservers();
+  else if (contextValid) resumeObservers();
 });
+window.addEventListener('pagehide', handlePageHide);
+window.addEventListener('pageshow', handlePageShow);
+window.addEventListener('beforeunload', () => { contextValid = false; }, { once: true });
+
+urlTimer = window.setInterval(refreshTopUrl, 1000);
+if (document.documentElement) loadSettings();
+else document.addEventListener('DOMContentLoaded', loadSettings, { once: true });

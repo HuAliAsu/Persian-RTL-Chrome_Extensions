@@ -1,4 +1,10 @@
-const AI_SITES = [
+'use strict';
+
+importScripts('core.js');
+
+const { SETTINGS_SCHEMA_VERSION, migrateSettings } = PersianExtensionCore;
+
+const DEFAULT_AI_SITES = [
   'chat.openai.com', 'chatgpt.com', 'claude.ai', 'gemini.google.com',
   'bard.google.com', 'copilot.microsoft.com', 'bing.com', 'you.com',
   'perplexity.ai', 'poe.com', 'character.ai', 'beta.character.ai',
@@ -23,15 +29,22 @@ const AI_SITES = [
   'aistudio.google.com', 'labs.google.com'
 ];
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.get(['globalEnabled', 'selectedFont', 'enabledSites'], (result) => {
-    if (result.globalEnabled === undefined) {
-      chrome.storage.local.set({
-        globalEnabled: true,
-        selectedFont: 'Vazirmatn[wght]',
-        enabledSites: AI_SITES,
-        siteFontSizes: {}
-      });
-    }
+function persistMigratedSettings() {
+  chrome.storage.local.get(null, existing => {
+    if (chrome.runtime.lastError) return;
+    if (existing.settingsSchemaVersion === SETTINGS_SCHEMA_VERSION &&
+        existing.rtlEnabled !== undefined) return;
+    chrome.storage.local.set(migrateSettings(existing, DEFAULT_AI_SITES), () => {
+      void chrome.runtime.lastError;
+    });
   });
+}
+
+chrome.runtime.onInstalled.addListener(persistMigratedSettings);
+chrome.runtime.onStartup.addListener(persistMigratedSettings);
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== 'persian-extension:get-top-url') return false;
+  sendResponse({ url: sender.tab?.url || sender.url || '' });
+  return false;
 });
