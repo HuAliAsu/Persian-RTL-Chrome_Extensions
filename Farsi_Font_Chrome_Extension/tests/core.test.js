@@ -54,3 +54,12 @@ test('migration preserves explicit false and an empty site list', () => {
   assert.equal(migrated.settingsSchemaVersion, core.SETTINGS_SCHEMA_VERSION);
   assert.deepEqual(core.migrateSettings(migrated, ['claude.ai']), migrated);
 });
+
+test('removed font selections fall back to the supported default', () => {
+  assert.equal(core.normalizeFontName('Shabnam'), 'Vazirmatn[wght]');
+  assert.equal(core.normalizeFontName('Samim'), 'Samim');
+  assert.equal(
+    core.migrateSettings({ selectedFont: 'Parastoo' }, []).selectedFont,
+    'Vazirmatn[wght]'
+  );
+});

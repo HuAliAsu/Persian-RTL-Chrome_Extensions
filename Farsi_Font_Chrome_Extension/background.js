@@ -2,7 +2,7 @@
 
 importScripts('core.js');
 
-const { SETTINGS_SCHEMA_VERSION, migrateSettings } = PersianExtensionCore;
+const { SETTINGS_SCHEMA_VERSION, migrateSettings, normalizeFontName } = PersianExtensionCore;
 
 const DEFAULT_AI_SITES = [
   'chat.openai.com', 'chatgpt.com', 'claude.ai', 'gemini.google.com',
@@ -33,7 +33,8 @@ function persistMigratedSettings() {
   chrome.storage.local.get(null, existing => {
     if (chrome.runtime.lastError) return;
     if (existing.settingsSchemaVersion === SETTINGS_SCHEMA_VERSION &&
-        existing.rtlEnabled !== undefined) return;
+        existing.rtlEnabled !== undefined &&
+        existing.selectedFont === normalizeFontName(existing.selectedFont)) return;
     chrome.storage.local.set(migrateSettings(existing, DEFAULT_AI_SITES), () => {
       void chrome.runtime.lastError;
     });

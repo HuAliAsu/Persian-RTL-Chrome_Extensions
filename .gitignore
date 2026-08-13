@@ -64,6 +64,9 @@ __pycache__/
 .vscode-insiders/
 chrome-extension.zip
 
+# Personal extension branding; never commit this file.
+Farsi_Font_Chrome_Extension/icon.private.png
+
 # Archive directories
 Archive/
 _Archive/

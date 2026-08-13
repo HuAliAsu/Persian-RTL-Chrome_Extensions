@@ -1,7 +1,7 @@
 'use strict';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const { normalizeHostname, normalizeSiteRules, ruleMatchesUrl } = PersianExtensionCore;
+  const { normalizeFontName, normalizeHostname, normalizeSiteRules, ruleMatchesUrl } = PersianExtensionCore;
   const globalToggle = document.getElementById('globalToggle');
   const rtlToggle = document.getElementById('rtlToggle');
   const fontSelect = document.getElementById('fontSelect');
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rules = normalizeSiteRules(result.enabledSites || []);
       globalToggle.checked = isDisabled;
       rtlToggle.checked = result.rtlEnabled !== false;
-      fontSelect.value = result.selectedFont || 'Vazirmatn[wght]';
+      fontSelect.value = normalizeFontName(result.selectedFont);
 
       const currentSize = (result.siteFontSizes || {})[hostname] || '100';
       fontSizeSlider.value = currentSize;

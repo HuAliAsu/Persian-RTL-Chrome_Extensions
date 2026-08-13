@@ -6,6 +6,13 @@
   'use strict';
 
   const SETTINGS_SCHEMA_VERSION = 2;
+  const SUPPORTED_FONTS = [
+    'Gandom',
+    'Mikhak[DSTY,KSHD,wght]',
+    'Sahel-VF',
+    'Samim',
+    'Vazirmatn[wght]'
+  ];
   const LETTER_REGEX = /\p{Letter}/u;
   const RTL_SCRIPT_REGEX = /[\p{Script=Arabic}\p{Script=Hebrew}]/u;
   const ARABIC_SCRIPT_REGEX = /\p{Script=Arabic}/u;
@@ -23,6 +30,10 @@
       if (LETTER_REGEX.test(character) && ARABIC_SCRIPT_REGEX.test(character)) return true;
     }
     return false;
+  }
+
+  function normalizeFontName(fontName) {
+    return SUPPORTED_FONTS.includes(fontName) ? fontName : 'Vazirmatn[wght]';
   }
 
   function normalizeHostname(hostname) {
@@ -114,7 +125,7 @@
     return {
       globalEnabled: source.globalEnabled !== undefined ? source.globalEnabled : true,
       rtlEnabled: source.rtlEnabled !== undefined ? source.rtlEnabled : true,
-      selectedFont: source.selectedFont || 'Vazirmatn[wght]',
+      selectedFont: normalizeFontName(source.selectedFont),
       enabledSites: normalizeSiteRules(hasEnabledSites ? source.enabledSites : defaults),
       siteFontSizes: source.siteFontSizes && typeof source.siteFontSizes === 'object'
         ? source.siteFontSizes
@@ -125,11 +136,13 @@
 
   return {
     SETTINGS_SCHEMA_VERSION,
+    SUPPORTED_FONTS,
     containsPersianText,
     detectDirection,
     isUrlEnabled,
     migrateSettings,
     normalizeHostname,
+    normalizeFontName,
     normalizePath,
     normalizeSiteRules,
     pathMatches,

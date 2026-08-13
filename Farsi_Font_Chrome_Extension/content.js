@@ -4,6 +4,7 @@ const {
   containsPersianText,
   detectDirection,
   isUrlEnabled,
+  normalizeFontName,
   normalizeHostname,
   normalizeSiteRules
 } = PersianExtensionCore;
@@ -112,7 +113,7 @@ function ensureRootStyle(root) {
     else root.appendChild(style);
   }
   const sizes = settings.siteFontSizes || {};
-  style.textContent = extensionCss(settings.selectedFont || 'Vazirmatn[wght]', sizes[currentHostname()] || '100');
+  style.textContent = extensionCss(normalizeFontName(settings.selectedFont), sizes[currentHostname()] || '100');
 }
 
 function isExcluded(element) {
@@ -368,7 +369,7 @@ function loadSettings() {
         settings = {
           globalEnabled: result.globalEnabled !== false,
           rtlEnabled: result.rtlEnabled !== false,
-          selectedFont: result.selectedFont || 'Vazirmatn[wght]',
+          selectedFont: normalizeFontName(result.selectedFont),
           enabledSites: normalizeSiteRules(result.enabledSites || []),
           siteFontSizes: result.siteFontSizes || {}
         };
