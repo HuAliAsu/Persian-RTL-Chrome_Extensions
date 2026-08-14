@@ -51,7 +51,7 @@ body {
   font-size: 14px;
 }
 
-.rtl-toggle-group,
+.rtl-mode-group,
 .site-toggle-group {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -110,6 +110,11 @@ select {
   font-size: 14px;
   text-align: right;
   cursor: pointer;
+}
+
+.no-font-option {
+  color: #94a3b8;
+  font-style: italic;
 }
 
 select:focus,

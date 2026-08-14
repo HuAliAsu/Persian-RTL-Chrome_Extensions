@@ -6,6 +6,7 @@
   'use strict';
 
   const SETTINGS_SCHEMA_VERSION = 2;
+  const NO_FONT_VALUE = 'none';
   const SUPPORTED_FONTS = [
     'Gandom',
     'Mikhak[DSTY,KSHD,wght]',
@@ -15,14 +16,33 @@
   ];
   const LETTER_REGEX = /\p{Letter}/u;
   const RTL_SCRIPT_REGEX = /[\p{Script=Arabic}\p{Script=Hebrew}]/u;
+  const RTL_LETTER_REGEX = /(?=[\p{Script=Arabic}\p{Script=Hebrew}])\p{Letter}/u;
   const ARABIC_SCRIPT_REGEX = /\p{Script=Arabic}/u;
+  const DETECTION_MODES = ['anyWord', 'firstStrong'];
+  const DEFAULT_DETECTION_MODE = 'anyWord';
 
-  function detectDirection(text) {
+  function detectDirectionFirstStrong(text) {
     for (const character of String(text || '')) {
       if (!LETTER_REGEX.test(character)) continue;
       return RTL_SCRIPT_REGEX.test(character) ? 'rtl' : 'ltr';
     }
     return 'neutral';
+  }
+
+  function detectDirectionAnyWord(text) {
+    const value = String(text || '');
+    if (RTL_LETTER_REGEX.test(value)) return 'rtl';
+    return LETTER_REGEX.test(value) ? 'ltr' : 'neutral';
+  }
+
+  function normalizeDetectionMode(mode) {
+    return DETECTION_MODES.includes(mode) ? mode : DEFAULT_DETECTION_MODE;
+  }
+
+  function detectDirection(text, mode) {
+    return normalizeDetectionMode(mode) === 'firstStrong'
+      ? detectDirectionFirstStrong(text)
+      : detectDirectionAnyWord(text);
   }
 
   function containsPersianText(text) {
@@ -33,6 +53,7 @@
   }
 
   function normalizeFontName(fontName) {
+    if (fontName === NO_FONT_VALUE) return NO_FONT_VALUE;
     return SUPPORTED_FONTS.includes(fontName) ? fontName : 'Vazirmatn[wght]';
   }
 
@@ -124,7 +145,7 @@
     const hasEnabledSites = Object.prototype.hasOwnProperty.call(source, 'enabledSites');
     return {
       globalEnabled: source.globalEnabled !== undefined ? source.globalEnabled : true,
-      rtlEnabled: source.rtlEnabled !== undefined ? source.rtlEnabled : true,
+      rtlDetectionMode: normalizeDetectionMode(source.rtlDetectionMode),
       selectedFont: normalizeFontName(source.selectedFont),
       enabledSites: normalizeSiteRules(hasEnabledSites ? source.enabledSites : defaults),
       siteFontSizes: source.siteFontSizes && typeof source.siteFontSizes === 'object'
@@ -137,10 +158,14 @@
   return {
     SETTINGS_SCHEMA_VERSION,
     SUPPORTED_FONTS,
+    NO_FONT_VALUE,
+    DETECTION_MODES,
+    DEFAULT_DETECTION_MODE,
     containsPersianText,
     detectDirection,
     isUrlEnabled,
     migrateSettings,
+    normalizeDetectionMode,
     normalizeHostname,
     normalizeFontName,
     normalizePath,

@@ -1,9 +1,9 @@
 'use strict';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const { normalizeFontName, normalizeHostname, normalizeSiteRules, ruleMatchesUrl } = PersianExtensionCore;
+  const { NO_FONT_VALUE, normalizeDetectionMode, normalizeFontName, normalizeHostname, normalizeSiteRules, ruleMatchesUrl } = PersianExtensionCore;
   const globalToggle = document.getElementById('globalToggle');
-  const rtlToggle = document.getElementById('rtlToggle');
+  const rtlModeToggle = document.getElementById('rtlModeToggle');
   const fontSelect = document.getElementById('fontSelect');
   const fontSizeSlider = document.getElementById('fontSizeSlider');
   const fontSizeValue = document.getElementById('fontSizeValue');
@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const siteLabel = document.getElementById('siteLabel');
 
   for (const option of fontSelect.options) {
+    if (option.value === NO_FONT_VALUE) continue;
     const fontUrl = chrome.runtime.getURL(`fonts/${option.value}.woff2`);
     const style = document.createElement('style');
     style.textContent = `
@@ -45,12 +46,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   chrome.storage.local.get(
-    ['globalEnabled', 'rtlEnabled', 'selectedFont', 'enabledSites', 'siteFontSizes'],
+    ['globalEnabled', 'rtlDetectionMode', 'selectedFont', 'enabledSites', 'siteFontSizes'],
     result => {
       const isDisabled = result.globalEnabled === false;
       const rules = normalizeSiteRules(result.enabledSites || []);
       globalToggle.checked = isDisabled;
-      rtlToggle.checked = result.rtlEnabled !== false;
+      rtlModeToggle.checked = normalizeDetectionMode(result.rtlDetectionMode) === 'firstStrong';
       fontSelect.value = normalizeFontName(result.selectedFont);
 
       const currentSize = (result.siteFontSizes || {})[hostname] || '100';
@@ -68,8 +69,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateUIState(disabled);
   });
 
-  rtlToggle.addEventListener('change', event => {
-    chrome.storage.local.set({ rtlEnabled: event.target.checked });
+  rtlModeToggle.addEventListener('change', event => {
+    chrome.storage.local.set({ rtlDetectionMode: event.target.checked ? 'firstStrong' : 'anyWord' });
   });
 
   fontSelect.addEventListener('change', event => {

@@ -4,9 +4,11 @@ const {
   containsPersianText,
   detectDirection,
   isUrlEnabled,
+  normalizeDetectionMode,
   normalizeFontName,
   normalizeHostname,
-  normalizeSiteRules
+  normalizeSiteRules,
+  NO_FONT_VALUE
 } = PersianExtensionCore;
 
 const FONT_ATTR = 'data-persian-font';
@@ -29,12 +31,11 @@ const listenerRoots = new Set();
 const originalEditorDirections = new WeakMap();
 
 function extensionCss(fontName, fontSize) {
-  const fontUrl = chrome.runtime.getURL(`fonts/${fontName}.woff2`);
   const multiplier = (Number.parseInt(fontSize, 10) / 100 || 1).toFixed(2);
-  return `
+  const fontBlock = fontName === NO_FONT_VALUE ? '' : `
     @font-face {
       font-family: 'PersianExtensionFont';
-      src: url('${fontUrl}') format('woff2');
+      src: url('${chrome.runtime.getURL(`fonts/${fontName}.woff2`)}') format('woff2');
       font-display: swap;
       unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
     }
@@ -42,6 +43,9 @@ function extensionCss(fontName, fontSize) {
       font-family: 'PersianExtensionFont', Tahoma, Arial, sans-serif !important;
       font-size: ${multiplier}em !important;
     }
+  `;
+  return `
+    ${fontBlock}
     [${DIRECTION_ATTR}="rtl"] {
       direction: rtl !important;
       text-align: start !important;
@@ -89,11 +93,11 @@ function isSiteActive() {
 }
 
 function effectiveFontEnabled() {
-  return Boolean(isSiteActive() && settings?.selectedFont);
+  return Boolean(isSiteActive() && settings?.selectedFont && settings.selectedFont !== NO_FONT_VALUE);
 }
 
 function effectiveRtlEnabled() {
-  return Boolean(isSiteActive() && settings?.rtlEnabled !== false);
+  return isSiteActive();
 }
 
 function getRootStyle(root) {
@@ -160,7 +164,7 @@ function updateBlock(element) {
   if (effectiveFontEnabled() && containsPersianText(text)) element.setAttribute(FONT_ATTR, 'true');
   else element.removeAttribute(FONT_ATTR);
 
-  if (effectiveRtlEnabled() && detectDirection(text) === 'rtl') element.setAttribute(DIRECTION_ATTR, 'rtl');
+  if (effectiveRtlEnabled() && detectDirection(text, settings.rtlDetectionMode) === 'rtl') element.setAttribute(DIRECTION_ATTR, 'rtl');
   else element.removeAttribute(DIRECTION_ATTR);
 }
 
@@ -363,12 +367,12 @@ function handlePageShow(event) {
 function loadSettings() {
   try {
     chrome.storage.local.get(
-      ['globalEnabled', 'rtlEnabled', 'selectedFont', 'enabledSites', 'siteFontSizes'],
+      ['globalEnabled', 'rtlDetectionMode', 'selectedFont', 'enabledSites', 'siteFontSizes'],
       result => {
         if (chrome.runtime.lastError || !contextValid) return;
         settings = {
           globalEnabled: result.globalEnabled !== false,
-          rtlEnabled: result.rtlEnabled !== false,
+          rtlDetectionMode: normalizeDetectionMode(result.rtlDetectionMode),
           selectedFont: normalizeFontName(result.selectedFont),
           enabledSites: normalizeSiteRules(result.enabledSites || []),
           siteFontSizes: result.siteFontSizes || {}
@@ -388,7 +392,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (!contextValid || areaName !== 'local' || !settings) return;
   for (const [key, change] of Object.entries(changes)) {
     if (key === 'enabledSites') settings.enabledSites = normalizeSiteRules(change.newValue || []);
-    else if (['globalEnabled', 'rtlEnabled', 'selectedFont', 'siteFontSizes'].includes(key)) settings[key] = change.newValue;
+    else if (key === 'rtlDetectionMode') settings.rtlDetectionMode = normalizeDetectionMode(change.newValue);
+    else if (['globalEnabled', 'selectedFont', 'siteFontSizes'].includes(key)) settings[key] = change.newValue;
   }
   refreshTopUrl();
   scanAllRoots();

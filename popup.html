@@ -5,6 +5,17 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
+  <div class="control-group site-toggle-group site-toggle-top">
+    <div class="site-info">
+      <span>فعال برای این سایت:</span>
+      <span id="currentHostname" class="hostname" dir="ltr">...</span>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="siteToggle" aria-label="فعال‌سازی افزونه برای سایت فعلی">
+      <span class="slider-thumb" aria-hidden="true"></span>
+    </label>
+  </div>
+
   <div class="header">
     <label class="checkbox-label">
       <input type="checkbox" id="globalToggle">
@@ -13,13 +24,13 @@
   </div>
 
   <fieldset id="settingsContainer">
-    <div class="control-group rtl-toggle-group">
+    <div class="control-group rtl-mode-group">
       <div class="setting-copy">
-        <label for="rtlToggle">راست‌چین خودکار</label>
-        <span id="rtlDescription">تشخیص جهت فارسی و انگلیسی</span>
+        <label for="rtlModeToggle">تشخیص فقط بر اساس کلمهٔ اول پاراگراف</label>
+        <span id="rtlModeDescription">پیش‌فرض خاموش است: با یک کلمهٔ فارسی در هر جای متن، کل پاراگراف راست‌چین می‌شود</span>
       </div>
       <label class="switch">
-        <input type="checkbox" id="rtlToggle" aria-describedby="rtlDescription">
+        <input type="checkbox" id="rtlModeToggle" aria-describedby="rtlModeDescription">
         <span class="slider-thumb" aria-hidden="true"></span>
       </label>
     </div>
@@ -27,6 +38,7 @@
     <div class="control-group">
       <label for="fontSelect">انتخاب فونت:</label>
       <select id="fontSelect">
+        <option value="none" class="no-font-option">بدون تغییر فونت</option>
         <option value="Vazirmatn[wght]">وزیرمتن (Vazirmatn)</option>
         <option value="Samim">صمیم (Samim)</option>
         <option value="Sahel-VF">ساحل (Sahel)</option>
@@ -44,17 +56,6 @@
         <span id="fontSizeValue" dir="ltr">100%</span>
       </div>
       <input type="range" id="fontSizeSlider" min="80" max="150" value="100" step="5">
-    </div>
-
-    <div class="control-group site-toggle-group">
-      <div class="site-info">
-        <span>فعال برای این سایت:</span>
-        <span id="currentHostname" class="hostname" dir="ltr">...</span>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="siteToggle" aria-label="فعال‌سازی افزونه برای سایت فعلی">
-        <span class="slider-thumb" aria-hidden="true"></span>
-      </label>
     </div>
 
     <button id="openSitesBtn" class="sites-btn">

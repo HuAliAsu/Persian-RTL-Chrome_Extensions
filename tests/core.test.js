@@ -4,18 +4,37 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('../core.js');
 
-test('detectDirection follows the first strong letter', () => {
+test('detectDirection defaults to rtl when any strong rtl word is present', () => {
   const cases = [
     ['سلام دنیا', 'rtl'],
     ['Hello world', 'ltr'],
     ['123 - سلام', 'rtl'],
     ['123 - Hello', 'ltr'],
-    ['Use متغیر in this code', 'ltr'],
+    ['Use متغیر in this code', 'rtl'],
     ['https://example.com', 'ltr'],
     ['۱۲۳۴', 'neutral'],
     ['متن فارسی with English', 'rtl']
   ];
   for (const [text, direction] of cases) assert.equal(core.detectDirection(text), direction, text);
+});
+
+test('detectDirection in firstStrong mode only looks at the first letter', () => {
+  const cases = [
+    ['سلام دنیا', 'rtl'],
+    ['123 - سلام', 'rtl'],
+    ['Use متغیر in this code', 'ltr'],
+    ['متن فارسی with English', 'rtl']
+  ];
+  for (const [text, direction] of cases) {
+    assert.equal(core.detectDirection(text, 'firstStrong'), direction, text);
+  }
+});
+
+test('normalizeDetectionMode falls back to the default for unknown values', () => {
+  assert.equal(core.normalizeDetectionMode('firstStrong'), 'firstStrong');
+  assert.equal(core.normalizeDetectionMode('anyWord'), 'anyWord');
+  assert.equal(core.normalizeDetectionMode('bogus'), core.DEFAULT_DETECTION_MODE);
+  assert.equal(core.normalizeDetectionMode(undefined), core.DEFAULT_DETECTION_MODE);
 });
 
 test('legacy site rules retain path boundaries and remove duplicates', () => {
@@ -45,11 +64,10 @@ test('site matching is exact unless subdomains are explicitly enabled', () => {
 test('migration preserves explicit false and an empty site list', () => {
   const migrated = core.migrateSettings({
     globalEnabled: false,
-    rtlEnabled: false,
     enabledSites: []
   }, ['chatgpt.com']);
   assert.equal(migrated.globalEnabled, false);
-  assert.equal(migrated.rtlEnabled, false);
+  assert.equal(migrated.rtlDetectionMode, 'anyWord');
   assert.deepEqual(migrated.enabledSites, []);
   assert.equal(migrated.settingsSchemaVersion, core.SETTINGS_SCHEMA_VERSION);
   assert.deepEqual(core.migrateSettings(migrated, ['claude.ai']), migrated);
@@ -61,5 +79,13 @@ test('removed font selections fall back to the supported default', () => {
   assert.equal(
     core.migrateSettings({ selectedFont: 'Parastoo' }, []).selectedFont,
     'Vazirmatn[wght]'
+  );
+});
+
+test('the no-font-change value is preserved instead of falling back', () => {
+  assert.equal(core.normalizeFontName(core.NO_FONT_VALUE), core.NO_FONT_VALUE);
+  assert.equal(
+    core.migrateSettings({ selectedFont: core.NO_FONT_VALUE }, []).selectedFont,
+    core.NO_FONT_VALUE
   );
 });
