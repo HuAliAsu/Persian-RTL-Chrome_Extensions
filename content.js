@@ -16,6 +16,7 @@ const DIRECTION_ATTR = 'data-persian-direction';
 const STYLE_ATTR = 'data-persian-extension-style';
 const BLOCK_SELECTOR = 'p,li,blockquote,figcaption,td,th,h1,h2,h3,h4,h5,h6,article,[role="article"],[role="listitem"]';
 const EDITOR_SELECTOR = 'textarea,input[type="text"],input[type="search"],[contenteditable="true"],[contenteditable="plaintext-only"]';
+const INTERACTIVE_SELECTOR = 'button,a,input,select,textarea,[contenteditable],svg,[role="button"],[role="toolbar"],[role="navigation"],[role="tablist"]';
 const EXCLUDED_SELECTOR = 'script,style,noscript,pre,code,kbd,samp,svg,math,.katex,.katex-display,.MathJax,.mathjax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]';
 const OBSERVER_OPTIONS = { childList: true, characterData: true, subtree: true };
 
@@ -131,7 +132,11 @@ function findTextBlock(node) {
   if (semantic && !semantic.matches('body,html,nav,aside')) return semantic;
   let candidate = element;
   while (candidate && !candidate.matches('body,html,nav,aside,main')) {
-    if (candidate.tagName === 'DIV' && candidate.querySelectorAll(':scope > p,:scope > article,:scope > section').length === 0) {
+    if (
+      candidate.tagName === 'DIV' &&
+      candidate.querySelectorAll(':scope > p,:scope > article,:scope > section').length === 0 &&
+      candidate.querySelectorAll(INTERACTIVE_SELECTOR).length === 0
+    ) {
       return candidate;
     }
     candidate = candidate.parentElement;
