@@ -175,27 +175,26 @@ function textWithoutExcludedDescendants(element) {
   return parts.join(' ');
 }
 
+function setAttrIf(element, attr, value, shouldSet, shouldRemove) {
+  if (shouldSet) {
+    if (element.getAttribute(attr) !== value) element.setAttribute(attr, value);
+  } else if (shouldRemove) {
+    if (element.hasAttribute(attr)) element.removeAttribute(attr);
+  }
+}
+
 function updateBlock(element) {
   if (!element?.isConnected || isExcluded(element)) return;
   const text = textWithoutExcludedDescendants(element).trim();
-  const hasPersian = effectiveFontEnabled() && containsPersianText(text);
-  const direction = effectiveRtlEnabled() ? detectDirection(text, settings.rtlDetectionMode) : 'neutral';
+  
+  const fontOn = effectiveFontEnabled();
+  const rtlOn = effectiveRtlEnabled();
+  
+  const hasPersian = fontOn && containsPersianText(text);
+  const direction = rtlOn ? detectDirection(text, settings.rtlDetectionMode) : 'neutral';
 
-  if (effectiveFontEnabled()) {
-    if (hasPersian) {
-      if (element.getAttribute(FONT_ATTR) !== 'true') element.setAttribute(FONT_ATTR, 'true');
-    } else if (!text || direction === 'ltr') {
-      if (element.hasAttribute(FONT_ATTR)) element.removeAttribute(FONT_ATTR);
-    }
-  } else if (element.hasAttribute(FONT_ATTR)) {
-    element.removeAttribute(FONT_ATTR);
-  }
-
-  if (direction === 'rtl') {
-    if (element.getAttribute(DIRECTION_ATTR) !== 'rtl') element.setAttribute(DIRECTION_ATTR, 'rtl');
-  } else if (!text || direction === 'ltr' || !effectiveRtlEnabled()) {
-    if (element.hasAttribute(DIRECTION_ATTR)) element.removeAttribute(DIRECTION_ATTR);
-  }
+  setAttrIf(element, FONT_ATTR, 'true', fontOn && hasPersian, !fontOn || !text || direction === 'ltr');
+  setAttrIf(element, DIRECTION_ATTR, 'rtl', direction === 'rtl', !rtlOn || !text || direction === 'ltr');
 }
 
 function editorText(editor) {
@@ -222,23 +221,19 @@ function restoreEditorDirection(editor) {
 function updateEditor(editor) {
   if (!editor?.isConnected || isExcluded(editor)) return;
   const text = editorText(editor);
-  const hasPersian = effectiveFontEnabled() && containsPersianText(text);
+  
+  const fontOn = effectiveFontEnabled();
+  const rtlOn = effectiveRtlEnabled();
+  
+  const hasPersian = fontOn && containsPersianText(text);
   const direction = detectDirection(text, settings.rtlDetectionMode);
 
-  if (effectiveFontEnabled()) {
-    if (hasPersian) {
-      if (editor.getAttribute(FONT_ATTR) !== 'true') editor.setAttribute(FONT_ATTR, 'true');
-    } else if (!text.trim() || direction === 'ltr') {
-      if (editor.hasAttribute(FONT_ATTR)) editor.removeAttribute(FONT_ATTR);
-    }
-  } else if (editor.hasAttribute(FONT_ATTR)) {
-    editor.removeAttribute(FONT_ATTR);
-  }
+  setAttrIf(editor, FONT_ATTR, 'true', fontOn && hasPersian, !fontOn || !text.trim() || direction === 'ltr');
 
-  if (effectiveRtlEnabled()) {
+  if (rtlOn) {
     rememberEditorDirection(editor);
-    if (editor.getAttribute('dir') !== 'auto') editor.setAttribute('dir', 'auto');
-    if (editor.getAttribute(DIRECTION_ATTR) !== 'auto') editor.setAttribute(DIRECTION_ATTR, 'auto');
+    setAttrIf(editor, 'dir', 'auto', true, false);
+    setAttrIf(editor, DIRECTION_ATTR, 'auto', true, false);
   } else {
     restoreEditorDirection(editor);
     if (editor.hasAttribute(DIRECTION_ATTR)) editor.removeAttribute(DIRECTION_ATTR);
@@ -247,27 +242,30 @@ function updateEditor(editor) {
 
 function processNode(node) {
   if (!node) return;
+  
   if (node.nodeType === Node.TEXT_NODE) {
     updateBlock(findTextBlock(node));
     return;
   }
+  
   if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
 
-  const element = node.nodeType === Node.ELEMENT_NODE ? node : null;
-  if (element?.matches(EDITOR_SELECTOR)) updateEditor(element);
+  if (node.matches?.(EDITOR_SELECTOR)) updateEditor(node);
   node.querySelectorAll?.(EDITOR_SELECTOR).forEach(updateEditor);
 
   const blocks = new Set();
-  if (element) {
-    const block = findTextBlock(element);
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const block = findTextBlock(node);
     if (block) blocks.add(block);
   }
+  
   const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
   let textNode;
   while ((textNode = walker.nextNode())) {
     const block = findTextBlock(textNode);
     if (block) blocks.add(block);
   }
+  
   blocks.forEach(updateBlock);
   discoverOpenShadowRoots(node);
 }
@@ -291,11 +289,14 @@ function preloadFont() {
 
 function scanAllRoots() {
   preloadFont();
+  if (!isSiteActive()) {
+    removeAllEffects();
+    return;
+  }
   for (const root of rootObservers.keys()) {
     ensureRootStyle(root);
     processNode(root instanceof Document ? root.documentElement : root);
   }
-  if (!isSiteActive()) removeAllEffects();
 }
 
 function scheduleFlush() {

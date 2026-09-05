@@ -1,20 +1,10 @@
-param(
-  [ValidateSet('public', 'private')]
-  [string]$Flavor = 'public'
-)
-
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$privateIcon = Join-Path $projectRoot 'icon.private.png'
 $outputDirectory = Join-Path $projectRoot 'dist'
-$outputName = "Farsi_Font_Chrome_Extension.$Flavor.zip"
+$outputName = "Farsi_Font_Chrome_Extension.zip"
 $outputPath = Join-Path $outputDirectory $outputName
-$stagingDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "farsi-font-extension-$Flavor-$([Guid]::NewGuid().ToString('N'))"
-
-if ($Flavor -eq 'private' -and -not (Test-Path -LiteralPath $privateIcon -PathType Leaf)) {
-  throw 'Private packaging requires Farsi_Font_Chrome_Extension/icon.private.png.'
-}
+$stagingDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "farsi-font-extension-$([Guid]::NewGuid().ToString('N'))"
 
 New-Item -ItemType Directory -Path $stagingDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
@@ -31,9 +21,7 @@ try {
   Get-ChildItem -LiteralPath $projectRoot -Filter '*.txt' -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $stagingDirectory
   }
-  if ($Flavor -eq 'private') {
-    Copy-Item -LiteralPath $privateIcon -Destination (Join-Path $stagingDirectory 'icon.png') -Force
-  }
+  
   if (Test-Path -LiteralPath $outputPath) {
     Remove-Item -LiteralPath $outputPath -Force
   }
