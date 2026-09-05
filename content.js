@@ -23,7 +23,7 @@ const OBSERVER_OPTIONS = { childList: true, characterData: true, subtree: true }
 let contextValid = true;
 let settings = null;
 let topUrl = window === window.top ? location.href : '';
-let mutationTimer = null;
+let microtaskScheduled = false;
 let urlTimer = null;
 let composing = false;
 const pendingNodes = new Set();
@@ -37,12 +37,19 @@ function extensionCss(fontName, fontSize) {
     @font-face {
       font-family: 'PersianExtensionFont';
       src: url('${chrome.runtime.getURL(`fonts/${fontName}.woff2`)}') format('woff2');
-      font-display: swap;
+      font-display: fallback;
       unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F;
     }
-    [${FONT_ATTR}] {
+    [${FONT_ATTR}],
+    [${FONT_ATTR}] :is(span, strong, em, b, i, a):not(:is(pre, code, kbd, samp, .katex, .MathJax, .monaco-editor, .CodeMirror, .cm-editor, [role="code"], [data-language]) *) {
       font-family: 'PersianExtensionFont', Tahoma, Arial, sans-serif !important;
+    }
+    [${FONT_ATTR}] {
       font-size: ${multiplier}em !important;
+    }
+    [${FONT_ATTR}] [${FONT_ATTR}],
+    [${FONT_ATTR}] :is(span, strong, em, b, i, a) {
+      font-size: 1em !important;
     }
   `;
   return `
@@ -52,12 +59,14 @@ function extensionCss(fontName, fontSize) {
       text-align: start !important;
       unicode-bidi: isolate !important;
     }
-    [${DIRECTION_ATTR}] :is(pre,code,kbd,samp,.katex,.MathJax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]) {
+    [${DIRECTION_ATTR}] :is(pre,code,kbd,samp,.katex,.MathJax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]),
+    [${DIRECTION_ATTR}] :is(pre,code,kbd,samp,.katex,.MathJax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]) * {
       direction: ltr !important;
       text-align: left !important;
       unicode-bidi: isolate !important;
     }
-    [${FONT_ATTR}] :is(pre,code,kbd,samp,.katex,.MathJax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]) {
+    [${FONT_ATTR}] :is(pre,code,kbd,samp,.katex,.MathJax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]),
+    [${FONT_ATTR}] :is(pre,code,kbd,samp,.katex,.MathJax,.monaco-editor,.CodeMirror,.cm-editor,[role="code"],[data-language]) * {
       font-family: monospace !important;
       font-size: 1em !important;
     }
@@ -118,7 +127,10 @@ function ensureRootStyle(root) {
     else root.appendChild(style);
   }
   const sizes = settings.siteFontSizes || {};
-  style.textContent = extensionCss(normalizeFontName(settings.selectedFont), sizes[currentHostname()] || '100');
+  const newCss = extensionCss(normalizeFontName(settings.selectedFont), sizes[currentHostname()] || '100');
+  if (style.textContent !== newCss) {
+    style.textContent = newCss;
+  }
 }
 
 function isExcluded(element) {
@@ -166,11 +178,24 @@ function textWithoutExcludedDescendants(element) {
 function updateBlock(element) {
   if (!element?.isConnected || isExcluded(element)) return;
   const text = textWithoutExcludedDescendants(element).trim();
-  if (effectiveFontEnabled() && containsPersianText(text)) element.setAttribute(FONT_ATTR, 'true');
-  else element.removeAttribute(FONT_ATTR);
+  const hasPersian = effectiveFontEnabled() && containsPersianText(text);
+  const direction = effectiveRtlEnabled() ? detectDirection(text, settings.rtlDetectionMode) : 'neutral';
 
-  if (effectiveRtlEnabled() && detectDirection(text, settings.rtlDetectionMode) === 'rtl') element.setAttribute(DIRECTION_ATTR, 'rtl');
-  else element.removeAttribute(DIRECTION_ATTR);
+  if (effectiveFontEnabled()) {
+    if (hasPersian) {
+      if (element.getAttribute(FONT_ATTR) !== 'true') element.setAttribute(FONT_ATTR, 'true');
+    } else if (!text || direction === 'ltr') {
+      if (element.hasAttribute(FONT_ATTR)) element.removeAttribute(FONT_ATTR);
+    }
+  } else if (element.hasAttribute(FONT_ATTR)) {
+    element.removeAttribute(FONT_ATTR);
+  }
+
+  if (direction === 'rtl') {
+    if (element.getAttribute(DIRECTION_ATTR) !== 'rtl') element.setAttribute(DIRECTION_ATTR, 'rtl');
+  } else if (!text || direction === 'ltr' || !effectiveRtlEnabled()) {
+    if (element.hasAttribute(DIRECTION_ATTR)) element.removeAttribute(DIRECTION_ATTR);
+  }
 }
 
 function editorText(editor) {
@@ -197,27 +222,32 @@ function restoreEditorDirection(editor) {
 function updateEditor(editor) {
   if (!editor?.isConnected || isExcluded(editor)) return;
   const text = editorText(editor);
-  if (effectiveFontEnabled() && containsPersianText(text)) editor.setAttribute(FONT_ATTR, 'true');
-  else editor.removeAttribute(FONT_ATTR);
+  const hasPersian = effectiveFontEnabled() && containsPersianText(text);
+  const direction = detectDirection(text, settings.rtlDetectionMode);
+
+  if (effectiveFontEnabled()) {
+    if (hasPersian) {
+      if (editor.getAttribute(FONT_ATTR) !== 'true') editor.setAttribute(FONT_ATTR, 'true');
+    } else if (!text.trim() || direction === 'ltr') {
+      if (editor.hasAttribute(FONT_ATTR)) editor.removeAttribute(FONT_ATTR);
+    }
+  } else if (editor.hasAttribute(FONT_ATTR)) {
+    editor.removeAttribute(FONT_ATTR);
+  }
 
   if (effectiveRtlEnabled()) {
     rememberEditorDirection(editor);
-    editor.setAttribute('dir', 'auto');
-    editor.setAttribute(DIRECTION_ATTR, 'auto');
+    if (editor.getAttribute('dir') !== 'auto') editor.setAttribute('dir', 'auto');
+    if (editor.getAttribute(DIRECTION_ATTR) !== 'auto') editor.setAttribute(DIRECTION_ATTR, 'auto');
   } else {
     restoreEditorDirection(editor);
-    editor.removeAttribute(DIRECTION_ATTR);
+    if (editor.hasAttribute(DIRECTION_ATTR)) editor.removeAttribute(DIRECTION_ATTR);
   }
 }
 
 function processNode(node) {
   if (!node) return;
   if (node.nodeType === Node.TEXT_NODE) {
-    const parent = node.parentElement;
-    if (parent && !isExcluded(parent) && effectiveFontEnabled()) {
-      const text = node.data.trim();
-      if (text && containsPersianText(text)) parent.setAttribute(FONT_ATTR, 'true');
-    }
     updateBlock(findTextBlock(node));
     return;
   }
@@ -227,16 +257,14 @@ function processNode(node) {
   if (element?.matches(EDITOR_SELECTOR)) updateEditor(element);
   node.querySelectorAll?.(EDITOR_SELECTOR).forEach(updateEditor);
 
-  if (element) updateBlock(findTextBlock(element));
+  const blocks = new Set();
+  if (element) {
+    const block = findTextBlock(element);
+    if (block) blocks.add(block);
+  }
   const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
   let textNode;
-  const blocks = new Set();
   while ((textNode = walker.nextNode())) {
-    const parent = textNode.parentElement;
-    if (parent && !isExcluded(parent) && effectiveFontEnabled()) {
-      const text = textNode.data.trim();
-      if (text && containsPersianText(text)) parent.setAttribute(FONT_ATTR, 'true');
-    }
     const block = findTextBlock(textNode);
     if (block) blocks.add(block);
   }
@@ -255,7 +283,14 @@ function removeAllEffects() {
   }
 }
 
+function preloadFont() {
+  if (effectiveFontEnabled() && document.fonts?.load) {
+    document.fonts.load("1em 'PersianExtensionFont'").catch(() => {});
+  }
+}
+
 function scanAllRoots() {
+  preloadFont();
   for (const root of rootObservers.keys()) {
     ensureRootStyle(root);
     processNode(root instanceof Document ? root.documentElement : root);
@@ -263,17 +298,31 @@ function scanAllRoots() {
   if (!isSiteActive()) removeAllEffects();
 }
 
+function scheduleFlush() {
+  if (microtaskScheduled) return;
+  microtaskScheduled = true;
+  queueMicrotask(() => {
+    microtaskScheduled = false;
+    flushMutations();
+  });
+}
+
 function flushMutations() {
-  mutationTimer = null;
-  if (!contextValid || document.hidden) return;
-  for (const node of pendingNodes) processNode(node);
+  if (!contextValid || document.hidden) {
+    pendingNodes.clear();
+    return;
+  }
+  for (const node of pendingNodes) {
+    if (node.isConnected) {
+      processNode(node);
+    }
+  }
   pendingNodes.clear();
 }
 
 function queueNode(node) {
   pendingNodes.add(node);
-  if (mutationTimer !== null) return;
-  mutationTimer = window.setTimeout(flushMutations, 80);
+  scheduleFlush();
 }
 
 function handleMutations(records) {
@@ -314,7 +363,7 @@ function discoverOpenShadowRoots(root) {
   if (!root?.querySelectorAll) return;
   const candidates = [];
   if (root.nodeType === Node.ELEMENT_NODE) candidates.push(root);
-  root.querySelectorAll('*').forEach(element => candidates.push(element));
+  root.querySelectorAll('*:not(p,span,a,strong,em,b,i,li,dt,dd,h1,h2,h3,h4,h5,h6,code,pre,br,hr,svg,path)').forEach(element => candidates.push(element));
   for (const element of candidates) {
     if (element.shadowRoot?.mode === 'open') {
       attachRoot(element.shadowRoot);
@@ -351,8 +400,7 @@ function resumeObservers() {
 
 function pauseObservers() {
   rootObservers.forEach(observer => observer.disconnect());
-  if (mutationTimer !== null) clearTimeout(mutationTimer);
-  mutationTimer = null;
+  microtaskScheduled = false;
   pendingNodes.clear();
 }
 
